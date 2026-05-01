@@ -2,8 +2,14 @@
 
 namespace App\Providers;
 
+use App\Listeners\AuthAuditListener;
 use App\Listeners\NotifyTelegramOnBackupEvent;
 use App\Models\SiteSetting;
+use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Lockout;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
+use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
@@ -45,5 +51,13 @@ class AppServiceProvider extends ServiceProvider
 
         // Telegram notif untuk event backup (sukses/gagal/cleanup/health)
         Event::subscribe(NotifyTelegramOnBackupEvent::class);
+
+        // Audit log untuk semua event auth (user-facing /login + Filament admin
+        // pakai event yang sama).
+        Event::listen(Login::class, [AuthAuditListener::class, 'handleLogin']);
+        Event::listen(Failed::class, [AuthAuditListener::class, 'handleFailed']);
+        Event::listen(Logout::class, [AuthAuditListener::class, 'handleLogout']);
+        Event::listen(Lockout::class, [AuthAuditListener::class, 'handleLockout']);
+        Event::listen(PasswordReset::class, [AuthAuditListener::class, 'handlePasswordReset']);
     }
 }

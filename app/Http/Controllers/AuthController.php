@@ -45,10 +45,8 @@ class AuthController extends Controller
             ['email' => $data['email'], 'password' => $data['password']],
             (bool) ($data['remember'] ?? false)
         )) {
-            // Catat failed attempt utk brute-force detection. Tidak pernah
-            // log password (Audit::log otomatis filter via SENSITIVE_KEYS).
-            SecurityMonitor::recordFailedLogin($data['email'], (string) $request->ip());
-
+            // SecurityMonitor + Audit untuk failed login otomatis ditangani
+            // oleh AuthAuditListener via event Illuminate\Auth\Events\Failed.
             return back()
                 ->withInput($request->only('email'))
                 ->withErrors(['email' => 'Email atau password salah.']);
@@ -87,11 +85,8 @@ class AuthController extends Controller
         // Update last_login_at (untuk monitoring di User Management).
         Auth::user()->forceFill(['last_login_at' => now()])->save();
 
-        // Reset counter & log success.
-        SecurityMonitor::clearFailedCounters($data['email'], (string) $request->ip());
-        Audit::log('auth.login.success', Auth::user(), [
-            'email' => SecurityMonitor::maskEmail($data['email']),
-        ]);
+        // Audit log + reset counter ditangani AuthAuditListener via event
+        // Illuminate\Auth\Events\Login. Tidak perlu duplikasi di sini.
 
         // Pastikan history order guest dengan email yang sama tergabung.
         $linked = Auth::user()->linkGuestOrders();
@@ -247,9 +242,7 @@ class AuthController extends Controller
     /** POST /logout */
     public function logout(Request $request): RedirectResponse
     {
-        if (Auth::check()) {
-            Audit::log('auth.logout', Auth::user());
-        }
+        // AuthAuditListener akan handle audit log via event Logout.
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
@@ -310,9 +303,7 @@ class AuthController extends Controller
         );
 
         if ($status === Password::PASSWORD_RESET) {
-            Audit::log('auth.password.reset_success', $resetUser, [
-                'email' => SecurityMonitor::maskEmail($data['email']),
-            ]);
+            // AuthAuditListener handle audit log via event Auth\Events\PasswordReset.
 
             return redirect()->route('login')->with('success', 'Password berhasil diubah, silakan login.');
         }
