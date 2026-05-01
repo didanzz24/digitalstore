@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Users\Schemas;
 
 use App\Models\User;
+use App\Support\PasswordPolicy;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -36,7 +37,8 @@ class UserForm
                             ->password()
                             ->revealable()
                             ->dehydrated(fn ($state) => filled($state))
-                            ->minLength(6),
+                            ->helperText(PasswordPolicy::description())
+                            ->rule(fn ($state) => filled($state) ? PasswordPolicy::default() : null),
                     ]),
 
                 Section::make('Role & Status')

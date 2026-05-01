@@ -9,6 +9,8 @@ use App\Services\AffiliateService;
 use App\Services\PakasirService;
 use App\Services\PaymentGatewayManager;
 use App\Support\Audit;
+use App\Support\PasswordPolicy;
+use App\Support\SecurityMonitor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,7 +18,6 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\View\View;
 
 class AuthController extends Controller
@@ -44,6 +45,10 @@ class AuthController extends Controller
             ['email' => $data['email'], 'password' => $data['password']],
             (bool) ($data['remember'] ?? false)
         )) {
+            // Catat failed attempt utk brute-force detection. Tidak pernah
+            // log password (Audit::log otomatis filter via SENSITIVE_KEYS).
+            SecurityMonitor::recordFailedLogin($data['email'], (string) $request->ip());
+
             return back()
                 ->withInput($request->only('email'))
                 ->withErrors(['email' => 'Email atau password salah.']);
@@ -81,6 +86,12 @@ class AuthController extends Controller
 
         // Update last_login_at (untuk monitoring di User Management).
         Auth::user()->forceFill(['last_login_at' => now()])->save();
+
+        // Reset counter & log success.
+        SecurityMonitor::clearFailedCounters($data['email'], (string) $request->ip());
+        Audit::log('auth.login.success', Auth::user(), [
+            'email' => SecurityMonitor::maskEmail($data['email']),
+        ]);
 
         // Pastikan history order guest dengan email yang sama tergabung.
         $linked = Auth::user()->linkGuestOrders();
@@ -122,7 +133,7 @@ class AuthController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
             'phone' => ['required', 'string', 'max:32', 'regex:/^[0-9+\- ]+$/'],
-            'password' => ['required', 'confirmed', PasswordRule::min(8)],
+            'password' => ['required', 'confirmed', PasswordPolicy::default()],
             'ref' => ['nullable', 'string', 'max:32'],
         ];
         if ($paywallEnabled) {
@@ -217,6 +228,10 @@ class AuthController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
+        Audit::log('auth.register.success', $user, [
+            'email' => SecurityMonitor::maskEmail($user->email),
+        ]);
+
         $linked = $user->linkGuestOrders();
         if ($linked > 0) {
             Audit::log('user.linked_guest_orders', $user, ['count' => $linked]);
@@ -232,6 +247,9 @@ class AuthController extends Controller
     /** POST /logout */
     public function logout(Request $request): RedirectResponse
     {
+        if (Auth::check()) {
+            Audit::log('auth.logout', Auth::user());
+        }
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
@@ -249,6 +267,10 @@ class AuthController extends Controller
     public function sendResetLink(Request $request): RedirectResponse
     {
         $data = $request->validate(['email' => ['required', 'email']]);
+
+        Audit::log('auth.password.reset_requested', null, [
+            'email' => SecurityMonitor::maskEmail($data['email']),
+        ]);
 
         // Selalu balas dengan pesan generic supaya tidak bocorin email mana
         // yang terdaftar (user enumeration).
@@ -272,20 +294,26 @@ class AuthController extends Controller
         $data = $request->validate([
             'token' => ['required', 'string'],
             'email' => ['required', 'email'],
-            'password' => ['required', 'confirmed', PasswordRule::min(8)],
+            'password' => ['required', 'confirmed', PasswordPolicy::default()],
         ]);
 
+        $resetUser = null;
         $status = Password::reset(
             $data,
-            function (User $user, string $password) {
+            function (User $user, string $password) use (&$resetUser) {
                 $user->forceFill([
                     'password' => Hash::make($password),
                     'remember_token' => Str::random(60),
                 ])->save();
+                $resetUser = $user;
             }
         );
 
         if ($status === Password::PASSWORD_RESET) {
+            Audit::log('auth.password.reset_success', $resetUser, [
+                'email' => SecurityMonitor::maskEmail($data['email']),
+            ]);
+
             return redirect()->route('login')->with('success', 'Password berhasil diubah, silakan login.');
         }
 

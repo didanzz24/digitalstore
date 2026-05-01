@@ -6,6 +6,7 @@ use App\Filament\Widgets\OrderStatusChart;
 use App\Filament\Widgets\RecentOrdersTable;
 use App\Filament\Widgets\RevenueChart;
 use App\Filament\Widgets\SalesStatsOverview;
+use App\Filament\Widgets\SecurityOverviewWidget;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -52,6 +53,7 @@ class AdminPanelProvider extends PanelProvider
                 RevenueChart::class,
                 OrderStatusChart::class,
                 RecentOrdersTable::class,
+                SecurityOverviewWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,

@@ -2,6 +2,13 @@
 
 Panduan lengkap setup source code ini di server Linux (Ubuntu 22.04+ / Debian 12+) untuk produksi, atau di mesin lokal untuk development.
 
+> **Untuk deploy ke VPS + koneksi domain + HTTPS lengkap dengan Nginx,
+> Supervisor, UFW & fail2ban**, lihat panduan terpisah:
+> [`docs/vps-deployment.md`](docs/vps-deployment.md).
+>
+> File ini fokus ke aspek aplikasi (config Laravel, DB, Pakasir, Telegram,
+> queue, scheduler).
+
 > Demo: <https://deer-conditioning-superior-lawn.trycloudflare.com> · Admin: `admin@akhpremium.test` / `password`
 
 ---

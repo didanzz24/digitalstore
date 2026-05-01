@@ -15,13 +15,17 @@ class AuthFlowTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** Password yang lolos PasswordPolicy::default() — dipakai semua test register. */
+    private const STRONG_PASSWORD = 'Rahasi4#Aman2025';
+
     public function test_user_can_register_with_valid_data(): void
     {
         $response = $this->post('/register', [
             'name' => 'Budi Tester',
             'email' => 'budi@test.com',
-            'password' => 'rahasia12',
-            'password_confirmation' => 'rahasia12',
+            'phone' => '081234567890',
+            'password' => self::STRONG_PASSWORD,
+            'password_confirmation' => self::STRONG_PASSWORD,
         ]);
 
         $response->assertRedirect();
@@ -34,12 +38,27 @@ class AuthFlowTest extends TestCase
         $this->post('/register', [
             'name' => 'Hacker',
             'email' => 'hacker@test.com',
-            'password' => 'rahasia12',
-            'password_confirmation' => 'rahasia12',
+            'phone' => '081234567890',
+            'password' => self::STRONG_PASSWORD,
+            'password_confirmation' => self::STRONG_PASSWORD,
             'is_admin' => 1,
         ]);
 
         $this->assertFalse(User::where('email', 'hacker@test.com')->first()->is_admin);
+    }
+
+    public function test_register_rejects_weak_password(): void
+    {
+        $response = $this->post('/register', [
+            'name' => 'Lemah',
+            'email' => 'lemah@test.com',
+            'phone' => '081234567890',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ]);
+
+        $response->assertSessionHasErrors('password');
+        $this->assertDatabaseMissing('users', ['email' => 'lemah@test.com']);
     }
 
     public function test_user_can_login_with_correct_credentials(): void
@@ -107,8 +126,9 @@ class AuthFlowTest extends TestCase
         $this->post('/register', [
             'name' => 'Budi',
             'email' => 'budi@test.com',
-            'password' => 'rahasia12',
-            'password_confirmation' => 'rahasia12',
+            'phone' => '081234567890',
+            'password' => self::STRONG_PASSWORD,
+            'password_confirmation' => self::STRONG_PASSWORD,
         ]);
 
         $user = User::where('email', 'budi@test.com')->first();

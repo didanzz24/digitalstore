@@ -9,6 +9,15 @@
         <h1 class="text-3xl font-extrabold tracking-tight">Public API</h1>
         <p class="text-slate-500">REST API untuk integrasi pihak ketiga — ambil produk, kategori, dan stok dari toko ini.</p>
 
+        <p class="text-sm bg-slate-50 border border-slate-200 rounded-lg p-3 mb-6">
+            Dokumentasi lengkap (schema, contoh integrasi Node.js/PHP, error
+            handling, webhooks) tersedia di
+            <a href="https://github.com/Dandutzz/digitalstore/blob/main/docs/api.md"
+               class="font-semibold text-indigo-600 underline" target="_blank" rel="noopener">
+                docs/api.md
+            </a> di repository.
+        </p>
+
         @if (! empty($site->public_api_docs_html))
             {!! $site->public_api_docs_html !!}
         @else

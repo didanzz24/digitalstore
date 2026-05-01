@@ -22,21 +22,48 @@ Stack: Laravel 13 · Filament 5 · PHP 8.3 · Tailwind (CDN) · MySQL 8 / MariaD
 - Audit log untuk aksi penting.
 
 ### Security
-- Kredensial akun di tabel `stocks` (`email_or_phone`, `password`,
-  `additional_info`) **dienkripsi otomatis** dengan `APP_KEY` (AES-256-CBC via
-  Laravel `encrypted` cast) — tidak pernah disimpan plain-text di DB.
+- **Password hashing** default **argon2id** (memory-hard OWASP-recommended) +
+  per-hash random salt — config di `config/hashing.php`. Plaintext password
+  tidak pernah ditulis ke storage. Bcrypt rounds=12 tetap supported sebagai
+  fallback; hash lama auto-rehash saat user login berikutnya.
+- **Password policy** terpusat di `App\Support\PasswordPolicy::default()`:
+  min 10 char, huruf besar+kecil, angka, simbol, cek HIBP. Diterapkan di
+  register/reset/profile + form admin.
+- **Brute-force monitor** real-time (`App\Support\SecurityMonitor`):
+  threshold per email (5×/10min), per IP (10×/10min), per admin (3×/10min).
+  Trigger Telegram alert + audit log.
+- **Audit log lengkap** di `/admin → Security → Audit Log`:
+  `auth.login.success`, `auth.login.failed`, `auth.password.changed`,
+  `order.*`, `webhook.*`, `security.alert.*`, dll. Sensitive keys auto-redact
+  (`password`, `token`, `api_key`, dst).
+- **Security dashboard widget** di admin panel: login sukses/gagal 24 jam,
+  jumlah security alerts, top IP brute-force suspect.
+- **Content-Security-Policy** header (default report-only, set
+  `CSP_ENFORCE=true` untuk enforce penuh).
+- Kredensial akun di tabel `stocks` **dienkripsi otomatis** dengan `APP_KEY`
+  (AES-256-CBC via Laravel `encrypted` cast).
 - `protected $fillable` eksplisit di semua model — bebas dari mass assignment.
 - `is_admin` flag + `FilamentUser::canAccessPanel()` → hanya admin yang boleh
   buka `/admin`.
 - Security headers global (X-Frame-Options, X-Content-Type-Options, Referrer
   Policy, Permissions Policy, HSTS untuk koneksi HTTPS).
-- Webhook Pakasir diverifikasi via Transaction Detail API (Pakasir tidak
-  mengirim signature) — webhook idempotent + cek `amount`+`order_id`+`project`.
-- Atomic stock assignment dengan `lockForUpdate()` agar tidak ada dua user yang
-  dapat akun yang sama secara race-condition.
-- Throttle 10 request/menit per IP di endpoint `/checkout`.
-- Audit log untuk event penting (`order.created`, `order.paid`,
-  `stock.delivered`, `webhook.processed`, dst).
+- Webhook Pakasir diverifikasi via Transaction Detail API + idempotent
+  fulfillment.
+- Atomic stock assignment dengan `lockForUpdate()` — race-condition safe.
+- Throttle per route (login 10/min, register 5/min, reset 2/min, checkout 10/min).
+- CSRF aktif global; pengecualian hanya untuk webhook eksternal.
+
+Detail teknis lengkap → [`docs/security.md`](docs/security.md).
+
+## Dokumentasi
+
+- [`docs/vps-deployment.md`](docs/vps-deployment.md) — panduan deploy VPS
+  end-to-end (Nginx + PHP-FPM + MySQL + Redis + Supervisor + Let's Encrypt +
+  domain pointing + UFW/fail2ban).
+- [`docs/api.md`](docs/api.md) — REST API reference (auth `X-API-KEY`,
+  endpoints, schema, contoh integrasi).
+- [`docs/security.md`](docs/security.md) — model keamanan: password policy,
+  hashing, audit logging, monitoring, CSP, dll.
 
 ## Setup
 

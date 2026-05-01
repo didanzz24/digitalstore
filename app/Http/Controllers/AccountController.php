@@ -3,11 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Support\Audit;
+use App\Support\PasswordPolicy;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\View\View;
 
 class AccountController extends Controller
@@ -77,20 +78,28 @@ class AccountController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'phone' => ['nullable', 'string', 'max:32', 'regex:/^[0-9+\- ]+$/'],
             'current_password' => ['nullable', 'required_with:password', 'string'],
-            'password' => ['nullable', 'confirmed', PasswordRule::min(8)],
+            'password' => ['nullable', 'confirmed', PasswordPolicy::default()],
         ]);
 
+        $passwordChanged = false;
         if (! empty($data['password'])) {
             if (! Hash::check($data['current_password'], $user->password)) {
                 return back()->withErrors(['current_password' => 'Password lama tidak cocok.']);
             }
 
             $user->password = Hash::make($data['password']);
+            $passwordChanged = true;
         }
 
         $user->name = $data['name'];
         $user->phone = $data['phone'] ?? null;
         $user->save();
+
+        if ($passwordChanged) {
+            Audit::log('auth.password.changed', $user);
+        } else {
+            Audit::log('account.profile.updated', $user, ['fields' => ['name', 'phone']]);
+        }
 
         return back()->with('success', 'Profil berhasil diperbarui.');
     }
