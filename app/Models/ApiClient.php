@@ -3,11 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 class ApiClient extends Model
 {
     protected $fillable = [
+        'user_id',
         'name',
         'api_key_hash',
         'api_key_prefix',
@@ -25,6 +27,11 @@ class ApiClient extends Model
             'rate_limit_per_minute' => 'integer',
             'last_used_at' => 'datetime',
         ];
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     /**
@@ -56,6 +63,29 @@ class ApiClient extends Model
         $hash = hash('sha256', $rawKey);
 
         return self::where('api_key_hash', $hash)->where('is_active', true)->first();
+    }
+
+    /**
+     * Issue / regenerate API key untuk user (1 key per user).
+     * Return raw key — caller wajib menampilkan ke user sekali ini saja.
+     */
+    public static function issueForUser(User $user): array
+    {
+        $generated = self::generateKey();
+
+        $client = self::firstOrNew(['user_id' => $user->id]);
+        $client->fill([
+            'name' => $client->name ?: ('User: '.$user->email),
+            'api_key_hash' => $generated['hash'],
+            'api_key_prefix' => $generated['prefix'],
+            'is_active' => true,
+            'rate_limit_per_minute' => $client->rate_limit_per_minute ?: 60,
+        ])->save();
+
+        return [
+            'raw' => $generated['raw'],
+            'client' => $client,
+        ];
     }
 
     /**

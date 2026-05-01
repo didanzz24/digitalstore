@@ -29,7 +29,7 @@ class MembershipController extends Controller
     public function show(): View|RedirectResponse
     {
         if (! MembershipService::isEnabled()) {
-            return redirect()->route('home')->with('error', 'Membership belum diaktifkan.');
+            return redirect()->route('home')->with('error', 'Akses API key belum diaktifkan admin.');
         }
 
         return view('membership', [
@@ -126,8 +126,8 @@ class MembershipController extends Controller
             ]);
 
             return redirect()
-                ->route('membership.show')
-                ->with('success', 'Pembayaran berhasil. Status member kamu sudah aktif.');
+                ->route('account.api-key')
+                ->with('success', 'Pembayaran berhasil. Akses API key sudah aktif — silakan generate key.');
         } catch (\Throwable $e) {
             $order->forceFill(['status' => Order::STATUS_FAILED])->save();
             \Log::error('Membership wallet payment failed', [

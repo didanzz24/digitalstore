@@ -51,6 +51,11 @@ class ManageSiteSettings extends Page implements HasForms
                     ->schema([
                         TextInput::make('store_name')->label('Nama Toko')->required(),
                         TextInput::make('tagline')->label('Tagline'),
+                        Toggle::make('storefront_enabled')
+                            ->label('Front Store ON')
+                            ->helperText('Kalau OFF, halaman homepage / browse produk akan menampilkan halaman "Toko sedang tidak aktif". Halaman invoice/checkout TETAP accessible — bot Telegram auto-order tetap jalan normal.')
+                            ->default(true)
+                            ->columnSpanFull(),
                         FileUpload::make('logo_path')
                             ->label('Logo')
                             ->image()
@@ -274,17 +279,18 @@ class ManageSiteSettings extends Page implements HasForms
                             ->placeholder('628xxx — nomor telepon merchant terdaftar di Gomerch'),
                     ]),
 
-                Section::make('Membership Berbayar')
-                    ->description('Member premium dapat fitur khusus seperti checkout bebas fee menggunakan saldo. Pembayaran membership otomatis aktivasi setelah PAID.')
+                Section::make('Membership API Key')
+                    ->description('Membership berbayar = unlock akses generate API key. Signup gratis tetap dapat fee-free wallet. Pembayaran member otomatis aktivasi setelah PAID; gateway pembayaran ikut konfigurasi gateway website.')
                     ->columns(2)
                     ->schema([
                         Toggle::make('membership_enabled')
-                            ->label('Aktifkan Membership Berbayar')
+                            ->label('Aktifkan Pembayaran API Key')
+                            ->helperText('Kalau OFF, halaman /membership & /api-key tidak bisa diakses dan link API Key disembunyikan dari menu user.')
                             ->default(false)
                             ->columnSpanFull(),
                         TextInput::make('membership_label')
-                            ->label('Nama Paket Member')
-                            ->default('Member Premium')
+                            ->label('Nama Paket')
+                            ->default('Akses API Key')
                             ->maxLength(64),
                         TextInput::make('membership_price')
                             ->label('Harga (Rp)')
@@ -310,8 +316,8 @@ class ManageSiteSettings extends Page implements HasForms
                             ->default(true),
                         Toggle::make('wallet_checkout_members_only')
                             ->label('Hanya Untuk Member')
-                            ->default(true)
-                            ->helperText('Kalau ON, hanya member aktif yang bisa pakai saldo (sesuai promo "Checkout Bebas Fee — khusus member").'),
+                            ->default(false)
+                            ->helperText('Kalau ON, hanya member aktif yang bisa pakai saldo. Default OFF — signup gratis sudah otomatis unlock fee-free wallet.'),
                         TextInput::make('wallet_display_name')
                             ->label('Display Name (Custom)')
                             ->placeholder('Saldo Akun')

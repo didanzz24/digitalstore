@@ -88,6 +88,14 @@ class MembershipService
                 'member_expires_at' => $expiresAt,
             ])->save();
 
+            // Auto-aktifkan API key user: kalau sudah ada (mis. perpanjangan),
+            // cukup pastikan is_active=true. Kalau belum ada, biarkan user
+            // generate sendiri di /api-key (supaya raw key bisa ditampilkan
+            // sekali ke user — di sini kita tidak punya channel untuk itu).
+            if ($user->apiClient) {
+                $user->apiClient->forceFill(['is_active' => true])->save();
+            }
+
             Audit::log('membership.activated', $order, [
                 'user_id' => $user->id,
                 'expires_at' => $expiresAt->toIso8601String(),

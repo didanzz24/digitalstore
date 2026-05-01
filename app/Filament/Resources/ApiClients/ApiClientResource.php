@@ -26,6 +26,16 @@ class ApiClientResource extends Resource
 
     protected static ?int $navigationSort = 40;
 
+    /**
+     * Disembunyikan dari navigasi karena per-user API key sudah dikelola
+     * langsung dari User Management. Resource & route-nya tetap ada (legacy)
+     * untuk admin yang masih perlu akses langsung ke list semua key.
+     */
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     public static function form(Schema $schema): Schema
     {
         return Schemas\ApiClientForm::configure($schema);
