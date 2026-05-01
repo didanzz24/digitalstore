@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\CaptureReferralCookie;
 use App\Http\Middleware\SecurityHeaders;
+use App\Http\Middleware\StorefrontEnabled;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -25,6 +26,12 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Set cookie referral saat ada ?ref=KODE di query string.
         $middleware->web(append: [CaptureReferralCookie::class]);
+
+        // Alias untuk dipakai per-route di routes/web.php — block akses ke
+        // halaman front store saat admin men-non-aktifkan storefront.
+        $middleware->alias([
+            'storefront' => StorefrontEnabled::class,
+        ]);
 
         // Webhook Pakasir datang dari luar (tidak ada sesi), jadi CSRF harus di-skip
         // khusus untuk path ini — validasi dilakukan via Transaction Detail API.

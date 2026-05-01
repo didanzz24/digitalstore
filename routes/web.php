@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AffiliateController;
+use App\Http\Controllers\ApiKeyController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CheckoutController;
@@ -17,16 +18,22 @@ use App\Http\Controllers\TelegramBotController;
 use Illuminate\Support\Facades\Route;
 
 // ======== Publik (frontend toko) ========
-Route::get('/', [FrontController::class, 'index'])->name('home');
-Route::get('/produk/{product}', [FrontController::class, 'show'])->name('products.show');
+// Halaman storefront (homepage + browse produk + info publik) di-block
+// kalau admin men-non-aktifkan storefront. Halaman invoice/checkout TIDAK
+// di-block — supaya bot Telegram bisa kasih link bayar ke customer
+// meski front store sedang OFF.
+Route::middleware('storefront')->group(function () {
+    Route::get('/', [FrontController::class, 'index'])->name('home');
+    Route::get('/produk/{product}', [FrontController::class, 'show'])->name('products.show');
 
-// Halaman info
-Route::get('/cara-pemesanan', [FrontController::class, 'howToOrder'])->name('pages.how-to-order');
-Route::get('/faq', [FrontController::class, 'faq'])->name('pages.faq');
-Route::get('/ketentuan-order', [FrontController::class, 'terms'])->name('pages.terms');
-Route::get('/artikel', [FrontController::class, 'articleIndex'])->name('articles.index');
-Route::get('/artikel/{article:slug}', [FrontController::class, 'articleShow'])->name('articles.show');
-Route::get('/cek-invoice', [FrontController::class, 'cekInvoice'])->name('pages.cek-invoice');
+    // Halaman info
+    Route::get('/cara-pemesanan', [FrontController::class, 'howToOrder'])->name('pages.how-to-order');
+    Route::get('/faq', [FrontController::class, 'faq'])->name('pages.faq');
+    Route::get('/ketentuan-order', [FrontController::class, 'terms'])->name('pages.terms');
+    Route::get('/artikel', [FrontController::class, 'articleIndex'])->name('articles.index');
+    Route::get('/artikel/{article:slug}', [FrontController::class, 'articleShow'])->name('articles.show');
+    Route::get('/cek-invoice', [FrontController::class, 'cekInvoice'])->name('pages.cek-invoice');
+});
 
 // Checkout instan — tanpa keranjang.
 Route::get('/checkout/{product}/{variant}', [CheckoutController::class, 'show'])
@@ -45,11 +52,20 @@ Route::get('/invoice/{orderCode}/check', [InvoiceController::class, 'check'])
     ->middleware('throttle:60,1')
     ->name('invoice.check');
 
-// Membership landing & subscribe.
+// Membership landing & subscribe — sekarang fungsinya sebagai paywall
+// untuk membuka akses API key (signup gratis tetap dapat fee-free wallet).
 Route::get('/membership', [MembershipController::class, 'show'])->name('membership.show');
 Route::post('/membership/subscribe', [MembershipController::class, 'subscribe'])
     ->middleware(['auth', 'throttle:5,1'])
     ->name('membership.subscribe');
+
+// Halaman self-service API key — hanya bisa diakses kalau membership aktif.
+Route::middleware('auth')->group(function () {
+    Route::get('/api-key', [ApiKeyController::class, 'show'])->name('account.api-key');
+    Route::post('/api-key/generate', [ApiKeyController::class, 'generate'])
+        ->middleware('throttle:6,1')
+        ->name('account.api-key.generate');
+});
 
 // Halaman docs API publik (free read).
 Route::view('/api-docs', 'api-docs')->name('api.docs');

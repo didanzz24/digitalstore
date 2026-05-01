@@ -8,6 +8,7 @@ class SiteSetting extends Model
 {
     protected $fillable = [
         'store_name',
+        'storefront_enabled',
         'tagline',
         'logo_path',
         'brand_color',
@@ -102,6 +103,7 @@ class SiteSetting extends Model
             'fonnte_api_key' => 'encrypted',
             'fonnte_auto_send_credentials' => 'boolean',
             'pakasir_api_key' => 'encrypted',
+            'storefront_enabled' => 'boolean',
             'pakasir_qris_only' => 'boolean',
             'pakasir_order_expiry_minutes' => 'integer',
             'pakasir_enabled' => 'boolean',

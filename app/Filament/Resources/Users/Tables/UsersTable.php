@@ -2,17 +2,20 @@
 
 namespace App\Filament\Resources\Users\Tables;
 
+use App\Models\ApiClient;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\WalletTransaction;
 use App\Services\FonnteWhatsApp;
 use App\Services\WalletService;
+use App\Support\Audit;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -29,7 +32,8 @@ class UsersTable
         return $table
             ->modifyQueryUsing(function (Builder $query) {
                 $query->withCount(['orders'])
-                    ->withSum(['orders as paid_total' => fn ($q) => $q->where('status', 'paid')], 'amount');
+                    ->withSum(['orders as paid_total' => fn ($q) => $q->where('status', 'paid')], 'amount')
+                    ->with(['apiClient']);
             })
             ->columns([
                 TextColumn::make('name')
@@ -68,6 +72,24 @@ class UsersTable
                     ->since()
                     ->placeholder('Belum pernah')
                     ->sortable(),
+                TextColumn::make('telegram_username')
+                    ->label('Telegram')
+                    ->prefix('@')
+                    ->placeholder('—')
+                    ->toggleable()
+                    ->description(fn (User $r) => $r->telegram_chat_id ? 'ID: '.$r->telegram_chat_id : null),
+                TextColumn::make('apiClient.api_key_prefix')
+                    ->label('API Key')
+                    ->placeholder('—')
+                    ->badge()
+                    ->color(fn (User $r) => $r->apiClient && $r->apiClient->is_active ? 'success' : 'gray')
+                    ->toggleable(),
+                IconColumn::make('is_member')
+                    ->label('Member')
+                    ->boolean()
+                    ->trueIcon('heroicon-o-check-badge')
+                    ->trueColor('warning')
+                    ->toggleable(),
                 TextColumn::make('created_at')
                     ->label('Bergabung')
                     ->date()
@@ -78,6 +100,16 @@ class UsersTable
             ->filters([
                 TernaryFilter::make('is_admin')->label('Role Admin'),
                 TernaryFilter::make('is_banned')->label('Banned'),
+                TernaryFilter::make('is_member')->label('Member Aktif'),
+                TernaryFilter::make('has_api_key')
+                    ->label('Punya API Key')
+                    ->placeholder('Semua')
+                    ->trueLabel('Sudah generate')
+                    ->falseLabel('Belum generate')
+                    ->queries(
+                        true: fn (Builder $q) => $q->whereHas('apiClient'),
+                        false: fn (Builder $q) => $q->whereDoesntHave('apiClient'),
+                    ),
             ])
             ->recordActions([
                 EditAction::make(),
@@ -183,6 +215,99 @@ class UsersTable
                         } catch (\Throwable $e) {
                             Notification::make()->danger()->title('Gagal')->body($e->getMessage())->send();
                         }
+                    }),
+
+                Action::make('apiKeyManage')
+                    ->label('API Key')
+                    ->icon('heroicon-o-key')
+                    ->color('primary')
+                    ->modalHeading(fn (User $r) => "Kelola API Key — {$r->name}")
+                    ->modalSubmitActionLabel('Simpan')
+                    ->modalCancelActionLabel('Tutup')
+                    ->fillForm(function (User $r) {
+                        $client = $r->apiClient;
+
+                        return [
+                            'is_active' => $client?->is_active ?? false,
+                            'rate_limit_per_minute' => $client?->rate_limit_per_minute ?? 60,
+                            'allowed_ips' => $client?->allowed_ips ?? '',
+                        ];
+                    })
+                    ->schema(fn (User $r) => [
+                        Toggle::make('is_active')
+                            ->label('API Key Aktif')
+                            ->helperText($r->apiClient
+                                ? 'Toggle off untuk men-disable key tanpa menghapusnya.'
+                                : 'User belum punya API key — pakai tombol "Reset Key" untuk generate.')
+                            ->disabled(! $r->apiClient),
+                        TextInput::make('rate_limit_per_minute')
+                            ->label('Rate Limit (req/menit)')
+                            ->numeric()
+                            ->minValue(1)
+                            ->maxValue(10000)
+                            ->required()
+                            ->helperText('Default 60. Max 10000.'),
+                        Textarea::make('allowed_ips')
+                            ->label('IP Whitelist')
+                            ->rows(4)
+                            ->placeholder("203.0.113.10\n198.51.100.0")
+                            ->helperText('Pisah dengan baris baru atau koma. Kosongkan = izinkan semua IP.'),
+                    ])
+                    ->action(function (array $data, User $r) {
+                        if (! $r->apiClient) {
+                            Notification::make()
+                                ->warning()
+                                ->title('Belum ada key')
+                                ->body('User belum generate API key. Pakai tombol "Reset Key" untuk generate.')
+                                ->send();
+
+                            return;
+                        }
+
+                        $r->apiClient->forceFill([
+                            'is_active' => (bool) ($data['is_active'] ?? false),
+                            'rate_limit_per_minute' => max(1, (int) ($data['rate_limit_per_minute'] ?? 60)),
+                            'allowed_ips' => trim((string) ($data['allowed_ips'] ?? '')) ?: null,
+                        ])->save();
+
+                        Audit::log('api_key.admin_updated', $r->apiClient, [
+                            'admin_id' => auth()->id(),
+                            'user_id' => $r->id,
+                        ]);
+
+                        Notification::make()->success()->title('Pengaturan API Key disimpan')->send();
+                    }),
+
+                Action::make('apiKeyReset')
+                    ->label(fn (User $r) => $r->apiClient ? 'Reset Key' : 'Generate Key')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (User $r) => $r->apiClient
+                        ? "Regenerate API Key — {$r->name}"
+                        : "Generate API Key — {$r->name}")
+                    ->modalDescription('Key lama akan langsung tidak valid. Salin key baru sekarang — tidak bisa dilihat lagi setelah ini.')
+                    ->action(function (User $r) {
+                        $issued = ApiClient::issueForUser($r);
+
+                        Audit::log('api_key.admin_issued', $issued['client'], [
+                            'admin_id' => auth()->id(),
+                            'user_id' => $r->id,
+                            'prefix' => $issued['client']->api_key_prefix,
+                        ]);
+
+                        Notification::make()
+                            ->success()
+                            ->title('API Key di-generate')
+                            ->body(new HtmlString(
+                                '<div class="space-y-1">'
+                                .'<p class="text-xs text-slate-600">Salin sekarang — tidak akan ditampilkan lagi:</p>'
+                                .'<code class="block px-2 py-1 bg-slate-100 rounded text-xs break-all">'
+                                .e($issued['raw'])
+                                .'</code></div>'
+                            ))
+                            ->persistent()
+                            ->send();
                     }),
 
                 Action::make('toggleBan')

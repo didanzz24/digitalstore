@@ -8,6 +8,7 @@ use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
@@ -93,6 +94,23 @@ class User extends Authenticatable implements FilamentUser
     public function memberSubscriptions(): HasMany
     {
         return $this->hasMany(MemberSubscription::class);
+    }
+
+    public function apiClient(): HasOne
+    {
+        return $this->hasOne(ApiClient::class);
+    }
+
+    /**
+     * Token Telegram link aktif (belum expired & belum digunakan) — buat
+     * tampilan admin di User Management.
+     */
+    public function activeTelegramLinkToken(): HasOne
+    {
+        return $this->hasOne(TelegramLinkToken::class)
+            ->whereNull('used_at')
+            ->where('expires_at', '>', now())
+            ->latest('id');
     }
 
     /**

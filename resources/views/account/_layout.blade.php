@@ -32,7 +32,7 @@
                             $items[] = ['account.affiliate.dashboard', 'Affiliate', '💰'];
                         }
                         if ($site->membership_enabled ?? false) {
-                            $items[] = ['membership.show', 'Membership', '⭐'];
+                            $items[] = ['account.api-key', 'API Key', '🔑'];
                         }
                     @endphp
                     @foreach ($items as [$route, $label, $icon])
